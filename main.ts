@@ -1,8 +1,8 @@
-import { AutoRouter, error } from "npm:itty-router";
-import { verifyJwt } from "npm:@atproto/xrpc-server";
-import { IdResolver } from "npm:@atproto/identity";
+import { AutoRouter, error } from "npm:itty-router@5.0.18";
+import { verifyJwt } from "npm:@atproto/xrpc-server@0.7.4";
+import { IdResolver } from "npm:@atproto/identity@0.4.3";
 import * as earthstar from "jsr:@earthstar/earthstar@11.0.0-beta.7";
-import { encodeBase32 } from "jsr:@std/encoding/base32";
+import { encodeBase32 } from "jsr:@std/encoding@1.0.6/base32";
 
 type Keypair = { publicKey: Uint8Array; secretKey: Uint8Array };
 
