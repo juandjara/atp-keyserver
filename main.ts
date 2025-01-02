@@ -3,7 +3,7 @@ import { verifyJwt } from "npm:@atproto/xrpc-server@0.7.4";
 import { IdResolver } from "npm:@atproto/identity@0.4.3";
 import * as earthstar from "jsr:@earthstar/earthstar@11.0.0-beta.7";
 import { encodeBase32 } from "jsr:@std/encoding@1.0.6/base32";
-import { assertDid } from "npm:@atproto/did@0.1.3";
+import { isDid, extractDidMethod } from "npm:@atproto/did@0.1.3";
 
 type Keypair = { publicKey: Uint8Array; secretKey: Uint8Array };
 
@@ -85,13 +85,16 @@ type Ctx = Request & AuthCtx;
 // Get a user's public key
 router.get("/xrpc/public.key.pigeon.muni.town", async ({ query }) => {
   const { did } = query;
-  try {
-    assertDid(did);
-  } catch (e) {
-    return error(400, `Invalid DID: ${e}`);
-  }
   if (typeof did !== "string" || !did)
     return error(400, "DID query parameter required");
+  if (!isDid(did)) return error(400, "Invalid DID");
+  const didMethod = extractDidMethod(did);
+  if (didMethod !== "web" && didMethod !== "plc")
+    return error(
+      400,
+      `Invalid DID method: '${did}'. Expected either 'web' or 'plc'`
+    );
+
   return {
     publicKey: await getPublicKey(did),
   };
