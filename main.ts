@@ -2,8 +2,9 @@ import { AutoRouter, error } from "npm:itty-router@5.0.18";
 import { verifyJwt } from "npm:@atproto/xrpc-server@0.7.4";
 import { IdResolver } from "npm:@atproto/identity@0.4.3";
 import * as earthstar from "jsr:@earthstar/earthstar@11.0.0-beta.7";
-import { encodeBase32 } from "jsr:@std/encoding@1.0.6/base32";
 import { isDid, extractDidMethod } from "npm:@atproto/did@0.1.3";
+import { encodeIdentityTag } from "https://jsr.io/@earthstar/earthstar/11.0.0-beta.7/src/identifiers/identity.ts";
+import { encodeBase32 } from "https://jsr.io/@earthstar/earthstar/11.0.0-beta.7/src/encoding/base32.ts"
 
 type Keypair = { publicKey: Uint8Array; secretKey: Uint8Array };
 
@@ -35,14 +36,20 @@ async function getKeypair(did: string): Promise<Keypair> {
 }
 async function getPublicKey(did: string): Promise<string> {
   const keypair = await getKeypair(did);
-  return encodeBase32(keypair.publicKey);
+  return encodeIdentityTag({
+    shortname: "auth",
+    underlying: keypair.publicKey,
+  });
 }
 async function getEncodedKeypair(
   did: string
 ): Promise<{ publicKey: string; secretKey: string }> {
   const keypair = await getKeypair(did);
   return {
-    publicKey: encodeBase32(keypair.publicKey),
+    publicKey: encodeIdentityTag({
+      shortname: "auth",
+      underlying: keypair.publicKey,
+    }),
     secretKey: encodeBase32(keypair.secretKey),
   };
 }
