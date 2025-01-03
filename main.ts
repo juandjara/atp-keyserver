@@ -1,4 +1,4 @@
-import { AutoRouter, error } from "npm:itty-router@5.0.18";
+import { AutoRouter, cors, error } from "npm:itty-router@5.0.18";
 import { verifyJwt } from "npm:@atproto/xrpc-server@0.7.4";
 import { IdResolver } from "npm:@atproto/identity@0.4.3";
 import * as earthstar from "jsr:@earthstar/earthstar@11.0.0-beta.7";
@@ -54,8 +54,11 @@ async function getEncodedKeypair(
   };
 }
 
-// const db = await Deno.openKv();
-const router = AutoRouter();
+const { preflight, corsify } = cors();
+const router = AutoRouter({
+  before: [preflight],
+  finally: [corsify],
+});
 
 const serviceDid = Deno.env.get("DID");
 
