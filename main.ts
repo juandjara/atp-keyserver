@@ -4,7 +4,7 @@ import { IdResolver } from "npm:@atproto/identity@0.4.3";
 import * as earthstar from "jsr:@earthstar/earthstar@11.0.0-beta.7";
 import { isDid, extractDidMethod } from "npm:@atproto/did@0.1.3";
 import { encodeIdentityTag } from "https://jsr.io/@earthstar/earthstar/11.0.0-beta.7/src/identifiers/identity.ts";
-import { encodeBase32 } from "https://jsr.io/@earthstar/earthstar/11.0.0-beta.7/src/encoding/base32.ts"
+import { encodeBase32 } from "https://jsr.io/@earthstar/earthstar/11.0.0-beta.7/src/encoding/base32.ts";
 
 type Keypair = { publicKey: Uint8Array; secretKey: Uint8Array };
 
@@ -91,9 +91,10 @@ type Ctx = Request & AuthCtx;
 
 // Get a user's public key
 router.get("/xrpc/public.key.pigeon.muni.town", async ({ query }) => {
-  const { did } = query;
+  let { did } = query;
   if (typeof did !== "string" || !did)
     return error(400, "DID query parameter required");
+  did = decodeURIComponent(did);
   if (!isDid(did)) return error(400, "Invalid DID");
   const didMethod = extractDidMethod(did);
   if (didMethod !== "web" && didMethod !== "plc")
