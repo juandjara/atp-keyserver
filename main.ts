@@ -142,7 +142,7 @@ router.all("*", async (ctx) => {
 });
 
 // Get the user's personal keypair
-router.get("/xrpc/key.roomy.v0.muni.town", ({ did }: Ctx) =>
+router.get("/xrpc/key.v0.roomy.muni.town", ({ did }: Ctx) =>
   getEncodedKeypair(did)
 );
 
