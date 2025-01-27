@@ -6,7 +6,7 @@ import * as ed25519 from "@noble/ed25519";
 import encodeBase32 from "base32-encode";
 
 type Keypair = { publicKey: Uint8Array; privateKey: Uint8Array };
-const encodeKey = (key: Uint8Array) => encodeBase32(key, "Crockford");
+const encodeKey = (key: Uint8Array) => encodeBase32(key, "Crockford").toLowerCase();
 
 // TODO: add a DID cache using Deno KV
 const idResolver = new IdResolver();
