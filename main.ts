@@ -1,12 +1,12 @@
-import { AutoRouter, cors, error } from "npm:itty-router@5.0.18";
-import { verifyJwt } from "npm:@atproto/xrpc-server@0.7.4";
-import { IdResolver } from "npm:@atproto/identity@0.4.3";
-import * as earthstar from "jsr:@earthstar/earthstar@11.0.0-beta.7";
-import { isDid, extractDidMethod } from "npm:@atproto/did@0.1.3";
-import { encodeIdentityTag } from "https://jsr.io/@earthstar/earthstar/11.0.0-beta.7/src/identifiers/identity.ts";
-import { encodeBase32 } from "https://jsr.io/@earthstar/earthstar/11.0.0-beta.7/src/encoding/base32.ts";
+import { AutoRouter, cors, error } from "itty-router";
+import { verifyJwt } from "@atproto/xrpc-server";
+import { IdResolver } from "@atproto/identity";
+import { isDid, extractDidMethod } from "@atproto/did";
+import * as ed25519 from "@noble/ed25519";
+import encodeBase32 from "base32-encode";
 
-type Keypair = { publicKey: Uint8Array; secretKey: Uint8Array };
+type Keypair = { publicKey: Uint8Array; privateKey: Uint8Array };
+const encodeKey = (key: Uint8Array) => encodeBase32(key, "Crockford");
 
 // TODO: add a DID cache using Deno KV
 const idResolver = new IdResolver();
@@ -22,8 +22,13 @@ async function getSigningKey(
 }
 
 const db = await Deno.openKv();
-function generateKeypair(): Promise<Keypair> {
-  return new earthstar.RuntimeDriverUniversal().ed25519.generateKeypair();
+async function generateKeypair(): Promise<Keypair> {
+  const privateKey = ed25519.utils.randomPrivateKey();
+  const publicKey = await ed25519.getPublicKeyAsync(privateKey);
+  return {
+    publicKey,
+    privateKey,
+  };
 }
 async function getKeypair(did: string): Promise<Keypair> {
   const entry = await db.get<Keypair>(["keys", did]);
@@ -36,21 +41,15 @@ async function getKeypair(did: string): Promise<Keypair> {
 }
 async function getPublicKey(did: string): Promise<string> {
   const keypair = await getKeypair(did);
-  return encodeIdentityTag({
-    shortname: "auth",
-    underlying: keypair.publicKey,
-  });
+  return encodeKey(keypair.publicKey);
 }
 async function getEncodedKeypair(
   did: string
-): Promise<{ publicKey: string; secretKey: string }> {
+): Promise<{ publicKey: string; privateKey: string }> {
   const keypair = await getKeypair(did);
   return {
-    publicKey: encodeIdentityTag({
-      shortname: "auth",
-      underlying: keypair.publicKey,
-    }),
-    secretKey: encodeBase32(keypair.secretKey),
+    publicKey: encodeKey(keypair.publicKey),
+    privateKey: encodeKey(keypair.privateKey),
   };
 }
 
@@ -73,8 +72,8 @@ router.get("/.well-known/did.json", ({ url }) => ({
   id: serviceDid,
   service: [
     {
-      id: "#pigeon_keyserver",
-      type: "PigeonKeyserver",
+      id: "#roomy_keyserver",
+      type: "RoomyKeyserver",
       serviceEndpoint: (() => {
         const u = new URL(url);
         u.pathname = "/";
@@ -93,7 +92,7 @@ type AuthCtx = {
 type Ctx = Request & AuthCtx;
 
 // Get a user's public key
-router.get("/xrpc/public.key.pigeon.muni.town", async ({ query }) => {
+router.get("/xrpc/public.key.v0.roomy.muni.town", async ({ query }) => {
   let { did } = query;
   if (typeof did !== "string" || !did)
     return error(400, "DID query parameter required");
@@ -143,7 +142,7 @@ router.all("*", async (ctx) => {
 });
 
 // Get the user's personal keypair
-router.get("/xrpc/key.pigeon.muni.town", ({ did }: Ctx) =>
+router.get("/xrpc/key.roomy.v0.muni.town", ({ did }: Ctx) =>
   getEncodedKeypair(did)
 );
 
