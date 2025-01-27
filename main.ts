@@ -92,7 +92,7 @@ type AuthCtx = {
 type Ctx = Request & AuthCtx;
 
 // Get a user's public key
-router.get("/xrpc/public.key.v0.roomy.muni.town", async ({ query }) => {
+router.get("/xrpc/town.muni.roomy.v0.key.public", async ({ query }) => {
   let { did } = query;
   if (typeof did !== "string" || !did)
     return error(400, "DID query parameter required");
@@ -142,7 +142,7 @@ router.all("*", async (ctx) => {
 });
 
 // Get the user's personal keypair
-router.get("/xrpc/key.v0.roomy.muni.town", ({ did }: Ctx) =>
+router.get("/xrpc/town.muni.roomy.v0.key", ({ did }: Ctx) =>
   getEncodedKeypair(did)
 );
 
