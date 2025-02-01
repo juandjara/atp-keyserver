@@ -6,7 +6,8 @@ import * as ed25519 from "@noble/ed25519";
 import encodeBase32 from "base32-encode";
 
 type Keypair = { publicKey: Uint8Array; privateKey: Uint8Array };
-const encodeKey = (key: Uint8Array) => encodeBase32(key, "Crockford").toLowerCase();
+const encodeKey = (key: Uint8Array) =>
+  encodeBase32(key, "Crockford").toLowerCase();
 
 // TODO: add a DID cache using Deno KV
 const idResolver = new IdResolver();
@@ -92,7 +93,7 @@ type AuthCtx = {
 type Ctx = Request & AuthCtx;
 
 // Get a user's public key
-router.get("/xrpc/town.muni.roomy.v0.key.public", async ({ query }) => {
+router.get("/xrpc/chat.roomy.v0.key.public", async ({ query }) => {
   let { did } = query;
   if (typeof did !== "string" || !did)
     return error(400, "DID query parameter required");
@@ -142,8 +143,6 @@ router.all("*", async (ctx) => {
 });
 
 // Get the user's personal keypair
-router.get("/xrpc/town.muni.roomy.v0.key", ({ did }: Ctx) =>
-  getEncodedKeypair(did)
-);
+router.get("/xrpc/chat.roomy.v0.key", ({ did }: Ctx) => getEncodedKeypair(did));
 
 Deno.serve(router.fetch);
