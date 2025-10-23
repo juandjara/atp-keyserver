@@ -1,3 +1,5 @@
+This repository has moved to Codeberg at https://codeberg.org/juandjara/atp-keyserver
+
 ## atp-keyserver
 private key storage for ATProto
 
