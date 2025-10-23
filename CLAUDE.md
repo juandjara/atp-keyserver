@@ -625,8 +625,6 @@ atp-keyserver/
 - Lexicon names are hard-coded (`dev.atpkeyserver.alpha`)
 - No unit tests or integration tests currently
 - Rate limiting not implemented
-- Key versioning and revocation
-- Access logging for security auditing
 
 ## Scalability Considerations
 
@@ -649,7 +647,7 @@ atp-keyserver/
 - Access logging for security monitoring and incident response
 
 ### Key Rotation Features
-- **User-Initiated Rotation**: `/xrpc/dev.atpkeyserver.alpha.key.rotate`
+- **User Key Rotation**: `/xrpc/dev.atpkeyserver.alpha.key.rotate`
 - **Group Key Rotation**: `/xrpc/dev.atpkeyserver.alpha.group.key.rotate` (owner only)
 - **Version Listing**: View all key versions with status and timestamps
 - **Specific Version Access**: Retrieve historical keys for decrypting old content
