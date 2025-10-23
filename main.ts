@@ -1,9 +1,9 @@
 import { AutoRouter, cors, error } from 'itty-router'
 import { verifyJwt } from '@atproto/xrpc-server'
 import { isDid, extractDidMethod } from '@atproto/did'
-import pkg from './package.json'
-import { getEncodedKeypair, getPublicKey, getSigningKey } from './lib/util'
 import authMiddleware from './lib/authMiddleware'
+import pkg from './package.json'
+import { getKeypair, getPublicKey } from './lib/keys/asymmetric'
 
 const { preflight, corsify } = cors()
 const router = AutoRouter({
@@ -83,7 +83,7 @@ router.all('*', (ctx) => authMiddleware(serviceDid, ctx))
 
 // Get the user's personal keypair
 router.get('/xrpc/chat.roomy.v0.key', ({ did }: Ctx) => {
-  return getEncodedKeypair(did)
+  return getKeypair(did)
 })
 
 const port = process.env.PORT ? parseInt(process.env.PORT) : 4000

@@ -1,8 +1,23 @@
 import { error, IRequest } from 'itty-router'
 import { verifyJwt } from '@atproto/xrpc-server'
-import { getSigningKey } from './util'
+import { IdResolver, MemoryCache } from '@atproto/identity'
 
 type JwtPayload = Awaited<ReturnType<typeof verifyJwt>>
+
+const idResolver = new IdResolver({
+  didCache: new MemoryCache(
+    60e3 * 60, // 1 HOUR,
+    60e3 * 60 * 24, // 1 DAY
+  ),
+})
+
+async function getSigningKey(
+  did: string,
+  forceRefresh: boolean,
+): Promise<string> {
+  const atprotoData = await idResolver.did.resolveAtprotoData(did, forceRefresh)
+  return atprotoData.signingKey
+}
 
 export default async function authMiddleware(
   serviceDid: string,
