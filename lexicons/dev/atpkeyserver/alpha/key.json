@@ -1,0 +1,26 @@
+{
+  "lexicon": 1,
+  "id": "dev.atpkeyserver.alpha.key",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Get the authenticated user's complete keypair.",
+      "parameters": {
+        "type": "params",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "description": "Optional: specific key version to retrieve"
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "ref",
+          "ref": "dev.atpkeyserver.alpha.defs#keypair"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "lexicon": 1,
+  "id": "dev.atpkeyserver.alpha.defs",
+  "defs": {
+    "keypair": {
+      "type": "object",
+      "required": ["publicKey", "privateKey", "version"],
+      "properties": {
+        "publicKey": {
+          "type": "string",
+          "description": "Hex-encoded Ed25519 public key"
+        },
+        "privateKey": {
+          "type": "string",
+          "description": "Hex-encoded Ed25519 private key"
+        },
+        "version": {
+          "type": "integer",
+          "description": "Key version number"
+        }
+      }
+    },
+    "publicKey": {
+      "type": "object",
+      "required": ["publicKey", "version"],
+      "properties": {
+        "publicKey": {
+          "type": "string",
+          "description": "Hex-encoded Ed25519 public key"
+        },
+        "version": {
+          "type": "integer",
+          "description": "Key version number"
+        }
+      }
+    },
+    "groupKey": {
+      "type": "object",
+      "required": ["groupId", "secretKey", "version"],
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "description": "Group identifier"
+        },
+        "secretKey": {
+          "type": "string",
+          "description": "Hex-encoded XChaCha20-Poly1305 secret key"
+        },
+        "version": {
+          "type": "integer",
+          "description": "Key version number"
+        }
+      }
+    },
+    "keyVersionInfo": {
+      "type": "object",
+      "required": ["version", "status", "created_at"],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "description": "Key version number"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "revoked", "rotated"],
+          "description": "Key status"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "datetime",
+          "description": "ISO timestamp when key was created"
+        },
+        "revoked_at": {
+          "type": "string",
+          "format": "datetime",
+          "description": "ISO timestamp when key was revoked (if applicable)"
+        }
+      }
+    },
+    "rotationResult": {
+      "type": "object",
+      "required": ["oldVersion", "newVersion", "rotatedAt"],
+      "properties": {
+        "oldVersion": {
+          "type": "integer",
+          "description": "Previous key version"
+        },
+        "newVersion": {
+          "type": "integer",
+          "description": "New active key version"
+        },
+        "rotatedAt": {
+          "type": "string",
+          "format": "datetime",
+          "description": "ISO timestamp of rotation"
+        }
+      }
+    },
+    "memberResult": {
+      "type": "object",
+      "required": ["groupId", "memberDid", "status"],
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "description": "Group identifier"
+        },
+        "memberDid": {
+          "type": "string",
+          "format": "did",
+          "description": "DID of the member"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["added", "removed"],
+          "description": "Operation status"
+        }
+      }
+    }
+  }
+}

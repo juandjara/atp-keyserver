@@ -1,0 +1,35 @@
+{
+  "lexicon": 1,
+  "id": "dev.atpkeyserver.alpha.group.member.add",
+  "defs": {
+    "main": {
+      "type": "procedure",
+      "description": "Add a member to a group. Only the group owner can perform this operation.",
+      "input": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["group_id", "member_did"],
+          "properties": {
+            "group_id": {
+              "type": "string",
+              "description": "Group identifier"
+            },
+            "member_did": {
+              "type": "string",
+              "format": "did",
+              "description": "DID of the member to add"
+            }
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "ref",
+          "ref": "dev.atpkeyserver.alpha.defs#memberResult"
+        }
+      }
+    }
+  }
+}

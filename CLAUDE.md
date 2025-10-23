@@ -165,7 +165,7 @@ Returns service DID document per AT Protocol specification:
 }
 ```
 
-#### `GET /xrpc/chat.roomy.v0.key.public?did={did}`
+#### `GET /xrpc/dev.atpkeyserver.alpha.key.public?did={did}`
 Retrieve any user's public key without authentication.
 
 **Query Parameters:**
@@ -185,7 +185,7 @@ Retrieve any user's public key without authentication.
 
 ### Protected Endpoints (Require JWT Authentication)
 
-#### `GET /xrpc/chat.roomy.v0.key`
+#### `GET /xrpc/dev.atpkeyserver.alpha.key`
 Retrieve the authenticated user's complete keypair.
 
 **Headers:**
@@ -200,6 +200,321 @@ Retrieve the authenticated user's complete keypair.
 ```
 
 **Implementation:** Calls `getKeypair(did)` from `lib/keys/asymmetric.ts` which returns or creates the user's Ed25519 keypair.
+
+### Key Rotation & Revocation Endpoints
+
+#### `POST /xrpc/dev.atpkeyserver.alpha.key.rotate` (Authenticated)
+Rotate the user's asymmetric keypair, marking the current version as revoked and generating a new version.
+
+**Headers:**
+- `Authorization: Bearer {jwt}`
+
+**Body:**
+```json
+{
+  "reason": "suspected_compromise" | "routine_rotation" | "user_requested"
+}
+```
+
+**Response:**
+```json
+{
+  "oldVersion": 1,
+  "newVersion": 2,
+  "rotatedAt": "2025-01-23T10:30:00.000Z"
+}
+```
+
+#### `GET /xrpc/dev.atpkeyserver.alpha.key.versions` (Authenticated)
+List all versions of the user's keypair with their status.
+
+**Headers:**
+- `Authorization: Bearer {jwt}`
+
+**Response:**
+```json
+{
+  "versions": [
+    {
+      "version": 2,
+      "status": "active",
+      "created_at": "2025-01-23T10:30:00.000Z",
+      "revoked_at": null
+    },
+    {
+      "version": 1,
+      "status": "revoked",
+      "created_at": "2025-01-20T08:00:00.000Z",
+      "revoked_at": "2025-01-23T10:30:00.000Z"
+    }
+  ]
+}
+```
+
+#### `GET /xrpc/dev.atpkeyserver.alpha.group.key` (Authenticated)
+Get a group's symmetric key (supports version parameter for historical keys).
+
+**Headers:**
+- `Authorization: Bearer {jwt}`
+
+**Query Parameters:**
+- `group_id` (required) - Group identifier (format: `{owner_did}#{group_name}`)
+- `version` (optional) - Specific version number
+
+**Response:**
+```json
+{
+  "groupId": "did:plc:abc123#followers",
+  "secretKey": "hex-encoded-secret-key",
+  "version": 1
+}
+```
+
+#### `POST /xrpc/dev.atpkeyserver.alpha.group.key.rotate` (Owner Only, Authenticated)
+Rotate a group's symmetric key (only the group owner can perform this action).
+
+**Headers:**
+- `Authorization: Bearer {jwt}`
+
+**Body:**
+```json
+{
+  "group_id": "did:plc:abc123#followers",
+  "reason": "suspected_compromise"
+}
+```
+
+**Response:**
+```json
+{
+  "groupId": "did:plc:abc123#followers",
+  "oldVersion": 1,
+  "newVersion": 2,
+  "rotatedAt": "2025-01-23T10:30:00.000Z"
+}
+```
+
+#### `GET /xrpc/dev.atpkeyserver.alpha.group.key.versions` (Authenticated)
+List all versions of a group key (owner and members can view).
+
+**Headers:**
+- `Authorization: Bearer {jwt}`
+
+**Query Parameters:**
+- `group_id` (required)
+
+**Response:**
+```json
+{
+  "groupId": "did:plc:abc123#followers",
+  "versions": [
+    {
+      "version": 2,
+      "status": "active",
+      "created_at": "2025-01-23T10:30:00.000Z",
+      "revoked_at": null
+    },
+    {
+      "version": 1,
+      "status": "revoked",
+      "created_at": "2025-01-20T08:00:00.000Z",
+      "revoked_at": "2025-01-23T10:30:00.000Z"
+    }
+  ]
+}
+```
+
+#### `POST /xrpc/dev.atpkeyserver.alpha.group.member.add` (Owner Only, Authenticated)
+Add a member to a group (only the group owner can perform this action).
+
+**Headers:**
+- `Authorization: Bearer {jwt}`
+
+**Body:**
+```json
+{
+  "group_id": "did:plc:abc123#followers",
+  "member_did": "did:plc:xyz789"
+}
+```
+
+**Response:**
+```json
+{
+  "groupId": "did:plc:abc123#followers",
+  "memberDid": "did:plc:xyz789",
+  "status": "added"
+}
+```
+
+**Error Responses:**
+- `404` - Group not found
+- `403` - Only owner can add members
+- `409` - Member already in group
+
+#### `POST /xrpc/dev.atpkeyserver.alpha.group.member.remove` (Owner Only, Authenticated)
+Remove a member from a group (only the group owner can perform this action).
+
+**Headers:**
+- `Authorization: Bearer {jwt}`
+
+**Body:**
+```json
+{
+  "group_id": "did:plc:abc123#followers",
+  "member_did": "did:plc:xyz789"
+}
+```
+
+**Response:**
+```json
+{
+  "groupId": "did:plc:abc123#followers",
+  "memberDid": "did:plc:xyz789",
+  "status": "removed"
+}
+```
+
+**Error Responses:**
+- `404` - Group not found or member not found in group
+- `403` - Only owner can remove members
+
+## Key Versioning & Revocation
+
+### Overview
+
+The keyserver implements **Option 1** key management: all key versions are retained to ensure backward compatibility and prevent data loss. This design is optimized for ATProto's distributed architecture where encrypted posts are permanently stored across PDSes and relays.
+
+### Why Versioning?
+
+In ATProto microblogging:
+- Posts are encrypted and stored permanently in public relays
+- Followers cache encrypted posts locally
+- Signatures must remain verifiable for thread integrity
+- Forward secrecy is architecturally impossible
+
+**Key rotation limits damage radius:** When a key leaks, rotation prevents new posts from being decrypted, while old posts remain readable to authorized parties.
+
+### Database Schema
+
+Both `keys` and `groups` tables use versioning:
+
+```sql
+-- Asymmetric keys
+CREATE TABLE keys (
+  did TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  public_key TEXT NOT NULL,
+  private_key TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  revoked_at TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  PRIMARY KEY (did, version)
+);
+CREATE INDEX idx_keys_did_status ON keys(did, status);
+
+-- Symmetric group keys
+CREATE TABLE groups (
+  id TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  owner_did TEXT NOT NULL,
+  secret_key TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  revoked_at TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  PRIMARY KEY (id, version)
+);
+CREATE INDEX idx_groups_id_status ON groups(id, status);
+
+-- Access logging
+CREATE TABLE key_access_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  did TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  accessed_at TEXT NOT NULL,
+  ip TEXT,
+  user_agent TEXT
+);
+```
+
+### Key Lifecycle
+
+**Status Values:**
+- `active` - Current version, used for encryption
+- `revoked` - Compromised or rotated out, still available for decryption
+- `rotated` - Replaced during routine rotation (reserved for future use)
+
+**Default Behavior:**
+- New keys start as version 1 with status `active`
+- API requests without version parameter return active key
+- Specific versions can be requested for decrypting old content
+
+### Client Integration
+
+**Encrypting New Content:**
+```typescript
+// Always fetch active key
+const { secretKey, version } = await fetch('/xrpc/dev.atpkeyserver.alpha.group.key?group_id=...')
+
+// Embed version in post metadata
+const post = {
+  encrypted_content: encrypt(content, secretKey),
+  key_version: version,  // Critical for decryption
+  encrypted_at: new Date().toISOString()
+}
+```
+
+**Decrypting Old Content:**
+```typescript
+// Read version from post metadata
+const keyVersion = post.key_version
+
+// Fetch specific version
+const { secretKey } = await fetch(
+  `/xrpc/dev.atpkeyserver.alpha.group.key?group_id=...&version=${keyVersion}`
+)
+
+const decrypted = decrypt(post.encrypted_content, secretKey)
+```
+
+### Rotation Workflow
+
+**User Suspects Compromise:**
+1. Call `/xrpc/dev.atpkeyserver.alpha.key.rotate` with reason
+2. Old version marked as `revoked`, new version created as `active`
+3. All new encryptions use new version
+4. Old encrypted content remains decryptable with old version
+
+**What's Protected:**
+- Future posts (encrypted with new key)
+- Signature verification (old keys still available)
+- Thread continuity (all messages remain readable)
+
+**What's Not Protected:**
+- Already-distributed encrypted posts (attacker already has them)
+- Cached keys on compromised devices (can't remotely delete)
+
+### Access Logging
+
+Every key access is logged for security monitoring:
+
+```typescript
+// Logged automatically on key retrieval
+{
+  did: "did:plc:abc123",
+  version: 2,
+  accessed_at: "2025-01-23T10:30:00.000Z",
+  ip: "192.0.2.1",
+  user_agent: "Mozilla/5.0..."
+}
+```
+
+**Use Cases:**
+- Detect unusual access patterns (e.g., 10,000 requests/hour)
+- Identify compromised accounts
+- Audit compliance requirements
+- Incident response investigation
+
 
 ## Security Model
 
@@ -283,8 +598,9 @@ atp-keyserver/
 │   ├── db.ts                   # Database schema and connection
 │   ├── authMiddleware.ts       # JWT authentication with DID resolution
 │   └── keys/
-│       ├── asymmetric.ts       # Ed25519 keypair management
-│       └── symmetric.ts        # XChaCha20 encryption & group management
+│       ├── asymmetric.ts       # Ed25519 keypair management with versioning
+│       ├── symmetric.ts        # XChaCha20 encryption & group management with versioning
+│       └── access-log.ts       # Key access logging for security auditing
 └── lexicons/
     └── dev/
         └── atpkeyserver/
@@ -306,10 +622,11 @@ atp-keyserver/
 ### Considerations for Future Development
 - Database error handling could be more comprehensive
 - Input validation beyond DID format checking
-- Lexicon names are hard-coded (`chat.roomy.v0`)
+- Lexicon names are hard-coded (`dev.atpkeyserver.alpha`)
 - No unit tests or integration tests currently
 - Rate limiting not implemented
-- No database migration strategy for schema updates
+- Key versioning and revocation
+- Access logging for security auditing
 
 ## Scalability Considerations
 
@@ -325,23 +642,37 @@ atp-keyserver/
 
 ## Key Rotation & Recovery
 
-### Current State
-- No mechanism for rotating keys
-- Keys are permanent once created
-- No key escrow or recovery mechanism
+### Current Implementation
+- Full key versioning system for asymmetric and symmetric keys
+- Key rotation API endpoints for both user and group keys
+- All historical key versions retained for backward compatibility
+- Access logging for security monitoring and incident response
+
+### Key Rotation Features
+- **User-Initiated Rotation**: `/xrpc/dev.atpkeyserver.alpha.key.rotate`
+- **Group Key Rotation**: `/xrpc/dev.atpkeyserver.alpha.group.key.rotate` (owner only)
+- **Version Listing**: View all key versions with status and timestamps
+- **Specific Version Access**: Retrieve historical keys for decrypting old content
+- **Status Tracking**: Active, revoked, or rotated status per version
+
+### Design Trade-offs
+- **Backward Compatibility Over Forward Secrecy**: All versions retained to prevent data loss
+- **ATProto-Optimized**: Designed for distributed public storage architecture
+- **No Re-encryption**: Old content uses old keys, new content uses new keys
+- **Thread Integrity**: Signatures remain verifiable across all versions
 
 ### Future Considerations
-- Versioning scheme for key rotation
-- Key revocation mechanism
-- Backup and recovery strategy
-- Encrypted backup for private keys
+- Key escrow or recovery mechanism for lost access
+- Encrypted backup strategy for database
+- Scheduled/automatic key rotation policies
+- Enhanced anomaly detection based on access logs
 
 ## AT Protocol Integration
 
 This keyserver implements a custom AT Protocol service type:
 
 **Service Type**: `AtpKeyserver`
-**Lexicon Scope**: `chat.roomy.v0`
+**Lexicon Scope**: `dev.atpkeyserver.alpha`
 
 The service follows AT Protocol conventions:
 - DID-based identity

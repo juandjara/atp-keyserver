@@ -10,7 +10,7 @@ import { error } from 'itty-router'
 
 /**
  * Create a new secret key for symmetric encryption.
- * @returns A base64-encoded string containing the secret key.
+ * @returns A hex-encoded string containing the secret key.
  */
 export function createSecretKey() {
   return bytesToHex(randomBytes(32))
@@ -21,9 +21,9 @@ const NONCE_LENGTH = 24
 /**
  * Encrypts a plaintext string using a symmetric key and an ID.
  * @param id - The ID to use for encryption. This can be any utf8 text identifying the message. For example, an user ID.
- * @param key - base64-encoded secret key
+ * @param key - hex-encoded secret key
  * @param plaintext - The plaintext string to encrypt.
- * @returns A base64-encoded string containing the nonce and the encrypted message.
+ * @returns A hex-encoded string containing the nonce and the encrypted message.
  */
 export function encryptMessage(id: string, key: string, plaintext: string) {
   // nonce is a fixed-length 24-byte string
@@ -39,8 +39,8 @@ export function encryptMessage(id: string, key: string, plaintext: string) {
 /**
  * Decrypts a ciphertext string using a symmetric key, nonce, and ID.
  * @param id - The ID used for encryption (utf8 text)
- * @param key - base64-encoded secret key.
- * @param ciphertext - The base64-encoded string containing the nonce and the encrypted message.
+ * @param key - hex-encoded secret key.
+ * @param ciphertext - The hex-encoded string containing the nonce and the encrypted message.
  * @returns the decrypted plaintext string.
  */
 export function decryptMessage(id: string, key: string, ciphertext: string) {
@@ -55,12 +55,28 @@ export function decryptMessage(id: string, key: string, ciphertext: string) {
   return new TextDecoder().decode(data)
 }
 
-function getGroup(group_id: string) {
+type GroupKeyVersionInfo = {
+  version: number
+  status: 'active' | 'revoked'
+  created_at: string
+  revoked_at: string | null
+}
+
+function getGroup(group_id: string, version?: number) {
+  if (version !== undefined) {
+    // Get specific version
+    return db
+      .query<DBSchema['groups'], [string, number]>(
+        'SELECT id, version, owner_did, secret_key, created_at, revoked_at, status FROM groups WHERE id = ? AND version = ?',
+      )
+      .get(group_id, version)
+  }
+
+  // Get active version
   return db
-    .query<
-      DBSchema['groups'],
-      [string]
-    >('SELECT id, owner_did, secret_key FROM groups WHERE id = ?')
+    .query<DBSchema['groups'], [string]>(
+      'SELECT id, version, owner_did, secret_key, created_at, revoked_at, status FROM groups WHERE id = ? AND status = "active" ORDER BY version DESC LIMIT 1',
+    )
     .get(group_id)
 }
 
@@ -77,17 +93,23 @@ function checkMembership(group_id: string, member_did: string) {
 
 function createGroup(group_id: string, owner_did: string) {
   const secret_key = createSecretKey()
-  db.query<void, [string, string, string]>(
-    'INSERT INTO groups (id, owner_did, secret_key) VALUES (?, ?, ?)',
-  ).run(group_id, owner_did, secret_key)
+  db.query<void, [string, number, string, string, string, string]>(
+    'INSERT INTO groups (id, version, owner_did, secret_key, created_at, status) VALUES (?, ?, ?, ?, ?, ?)',
+  ).run(group_id, 1, owner_did, secret_key, new Date().toISOString(), 'active')
   return secret_key
 }
 
-export function getGroupKey(group_id: string, authed_did: string) {
+export function getGroupKey(
+  group_id: string,
+  authed_did: string,
+  version?: number,
+): string {
   const [owner_did] = group_id.split('#')
-  const group = getGroup(group_id)
+  const group = getGroup(group_id, version)
+
   if (!group) {
-    if (owner_did === authed_did) {
+    if (owner_did === authed_did && version === undefined) {
+      // Create new group (only if not requesting specific version)
       return createGroup(group_id, owner_did)
     }
     throw error(404, 'Group not found')
@@ -101,10 +123,72 @@ export function getGroupKey(group_id: string, authed_did: string) {
   const isMember = checkMembership(group_id, authed_did)
 
   if (isMember) {
-    return group?.secret_key
+    return group.secret_key
   } else {
     throw error(403, 'Cannot access this group key')
   }
+}
+
+export function rotateGroupKey(
+  group_id: string,
+  authed_did: string,
+  reason: string,
+): { oldVersion: number; newVersion: number; rotatedAt: string } {
+  const group = getGroup(group_id)
+  if (!group) {
+    throw error(404, 'Group not found')
+  }
+
+  if (group.owner_did !== authed_did) {
+    throw error(403, 'Only group owner can rotate keys')
+  }
+
+  // Mark current as revoked
+  const now = new Date().toISOString()
+  db.query<void, [string, string, number]>(
+    'UPDATE groups SET status = "revoked", revoked_at = ? WHERE id = ? AND version = ?',
+  ).run(now, group_id, group.version)
+
+  // Create new version
+  const newVersion = group.version + 1
+  const newKey = createSecretKey()
+
+  db.query<void, [string, number, string, string, string, string]>(
+    'INSERT INTO groups (id, version, owner_did, secret_key, created_at, status) VALUES (?, ?, ?, ?, ?, ?)',
+  ).run(group_id, newVersion, group.owner_did, newKey, now, 'active')
+
+  return {
+    oldVersion: group.version,
+    newVersion,
+    rotatedAt: now,
+  }
+}
+
+export function listGroupKeyVersions(
+  group_id: string,
+  authed_did: string,
+): GroupKeyVersionInfo[] {
+  const group = getGroup(group_id)
+  if (!group) {
+    throw error(404, 'Group not found')
+  }
+
+  // Check authorization
+  if (group.owner_did !== authed_did && !checkMembership(group_id, authed_did)) {
+    throw error(403, 'Cannot access this group')
+  }
+
+  const query = db.query<
+    DBSchema['groups'],
+    [string]
+  >('SELECT version, status, created_at, revoked_at FROM groups WHERE id = ? ORDER BY version DESC')
+
+  return query.all(group_id).map((row) => ({
+    version: row.version,
+    status: row.status,
+    created_at: row.created_at,
+    revoked_at: row.revoked_at,
+  }))
 }
 
 export function addMember(

@@ -1,0 +1,26 @@
+{
+  "lexicon": 1,
+  "id": "dev.atpkeyserver.alpha.key.versions",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "List all versions of the user's keypair with their status.",
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "object",
+          "required": ["versions"],
+          "properties": {
+            "versions": {
+              "type": "array",
+              "items": {
+                "type": "ref",
+                "ref": "dev.atpkeyserver.alpha.defs#keyVersionInfo"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

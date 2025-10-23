@@ -1,0 +1,32 @@
+{
+  "lexicon": 1,
+  "id": "dev.atpkeyserver.alpha.key.public",
+  "defs": {
+    "main": {
+      "type": "query",
+      "description": "Get a user's public key without authentication.",
+      "parameters": {
+        "type": "params",
+        "required": ["did"],
+        "properties": {
+          "did": {
+            "type": "string",
+            "format": "did",
+            "description": "DID of the user (must be did:web or did:plc)"
+          },
+          "version": {
+            "type": "integer",
+            "description": "Optional: specific key version to retrieve"
+          }
+        }
+      },
+      "output": {
+        "encoding": "application/json",
+        "schema": {
+          "type": "ref",
+          "ref": "dev.atpkeyserver.alpha.defs#publicKey"
+        }
+      }
+    }
+  }
+}

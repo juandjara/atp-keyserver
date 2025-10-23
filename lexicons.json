@@ -1,7 +1,7 @@
 [
   {
     "lexicon": 1,
-    "id": "chat.roomy.v0.key",
+    "id": "dev.atpkeyserver.alpha.key",
     "defs": {
       "main": {
         "type": "query",
@@ -25,7 +25,7 @@
   },
   {
     "lexicon": 1,
-    "id": "chat.roomy.v0.key.public",
+    "id": "dev.atpkeyserver.alpha.key.public",
     "defs": {
       "main": {
         "type": "query",
